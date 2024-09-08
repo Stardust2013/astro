@@ -848,6 +848,78 @@ Real convertEllipticalMeanAnomalyToEccentricAnomaly(
     return eccentricAnomaly;
 }
 
+//! Convert elliptical mean anomaly to eccentric anomaly using a binary search.
+/*!
+ * Converts mean anomaly to eccentric anomaly for elliptical orbits,
+ * for all eccentricities >= 0.0 and < 1.0.
+ *
+ * If the eccentricity falls outside the valid range, then a runtime
+ * exception is thrown.
+ *
+ * A binary search with 100 iterations should yield about 32 bits of precision.
+ *
+ * Also, note that the mean anomaly is automatically transformed to fit within the 0 to 2.0pi range.
+ *
+ * @tparam    Real                  Real number type
+ * @tparam    Integer               Integer type
+ * @param     eccentricity          Eccentricity                                               [-]
+ * @param     meanAnomaly           Mean anomaly                                               [rad]
+ * @param     iterations            Binary search iterations                                   [-]
+ * @return                          Eccentric anomaly                                          [rad]
+ */
+template <typename Real, typename Integer>
+Real convertEllipticalMeanAnomalyToEccentricAnomalyBS(
+    const Real      eccentricity,
+    const Real      meanAnomaly,
+    const Integer   iterations = 100)
+{
+    assert(eccentricity >= 0.0 && eccentricity < 1.0);
+
+    const Real pi = 3.14159265358979323846;
+
+    // Set mean anomaly to domain between 0 and 2pi.
+    Real meanAnomalyShifted = std::fmod(meanAnomaly, 2.0 * pi);
+    if (meanAnomalyShifted <0.0)
+    {
+        meanAnomalyShifted += 2.0 * pi;
+    }
+
+    Real M = meanAnomalyShifted;
+    Real E = eccentricity;
+    Real E0;
+    Real D;
+
+    // TODO: sign(M). This is used twice in the algorithm, and could be extracted to a separate function.
+    Real F = (Real(0) < M) - (M < Real(0));
+    M = fabs(M) / (2.0 * pi);
+    M = (M - (int)M) * 2.0 * pi * F;
+    if (M < 0)
+    {
+        M = M + 2.0 * pi;
+    }
+
+    F = 1.0;
+    if (M > pi)
+    {
+        F = -1.0;
+        M = 2.0 * pi - M;
+    }
+
+    E0 = pi * 0.5;
+    D = pi * 0.25;
+    for (int J = 0; J < iterations; J++)
+    {
+        Real M1 = E0 - E * sin(E0);
+        Real val = M - M1;
+        E0 = E0 + D * ((Real(0) < val) - (val < Real(0)));
+        D *= 0.5;
+    }
+
+    E0 *= F;
+
+    return E0;
+}
+
 } // namespace astro
 
 /*!
@@ -856,4 +928,5 @@ Real convertEllipticalMeanAnomalyToEccentricAnomaly(
  *      2007.
  *  Musegaas, P. Optimization of Space Trajectories Including Multiple Gravity Assists and Deep
  *      Space Maneuvers. MSc thesis, Delft University of Technology, 2013.
+ *  Meeus, J. Astronomical Algorithms. Second Edition, Willmann-Bell, Inc. 1991.
  */
